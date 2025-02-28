@@ -1,0 +1,11 @@
+# Ignoruj AES kľúč
+aes_key.bin
+
+# Ignoruj OpenSSL konfiguračný súbor a certifikáty
+openssl.cnf
+server_cert.pem
+server_key.pem
+server.csr
+
+# Ignoruj súbor prostredia
+.env
