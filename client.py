@@ -16,14 +16,14 @@ class ChatClientApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Encrypted Chat")
-        self.root.geometry("600x400")
-
+        self.root.geometry("735x450")
+        
         self.text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, state=tk.DISABLED, font=("Monospace", 10))
         self.text_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
 
         self.entry = tk.Entry(root, width=70)
         self.entry.pack(padx=10, pady=5, side=tk.LEFT, fill=tk.X, expand=True)
-        self.entry.bind("<Return>", self.send_message)
+        self.entry.bind("<Return>", self.send_message)  # Toto už zavolá správne self.send_message
 
         self.send_button = tk.Button(root, text="Send", command=self.send_message)
         self.send_button.pack(padx=5, pady=5, side=tk.RIGHT)
@@ -43,20 +43,38 @@ class ChatClientApp:
         self.receive_thread.daemon = True
         self.receive_thread.start()
 
+    def get_key_path(self, filename):
+        app_dir = os.path.expanduser("~/Library/Application Support/CipherLink/")
+        if not os.path.exists(app_dir):
+            os.makedirs(app_dir)
+        return os.path.join(app_dir, filename)
+
     def load_rsa_keys(self):
-        if not os.path.exists("private.pem") or not os.path.exists("public.pem"):
+        private_path = self.get_key_path("private.pem")
+        public_path = self.get_key_path("public.pem")
+
+        if not os.path.exists(private_path) or not os.path.exists(public_path):
             key = RSA.generate(2048)
             private_key = key.export_key()
             public_key = key.publickey().export_key()
-            with open("private.pem", "wb") as priv_file:
+            with open(private_path, "wb") as priv_file:
                 priv_file.write(private_key)
-            with open("public.pem", "wb") as pub_file:
+            with open(public_path, "wb") as pub_file:
                 pub_file.write(public_key)
-        with open("private.pem", "rb") as priv_file:
+
+        with open(private_path, "rb") as priv_file:
             private_key = RSA.import_key(priv_file.read())
-        with open("public.pem", "rb") as pub_file:
+        with open(public_path, "rb") as pub_file:
             public_key = RSA.import_key(pub_file.read())
+
         return private_key, public_key
+
+    def send_message(self, event=None):
+        message = self.entry.get().strip()
+        if message:
+            self.display_message(f"Me: {message}")
+            self.entry.delete(0, tk.END)
+
 
     def setup_connection(self):
         host = '127.0.0.1'
