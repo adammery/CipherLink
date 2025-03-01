@@ -8,8 +8,17 @@ import unicodedata
 import threading
 import select
 import os
+import time
 
-exit_flag = threading.Event()
+def resource_path(relative_path):
+    """ Získa absolútnu cestu k zdroju, ktorý je zahrnutý do spustiteľného súboru. """
+    try:
+        # PyInstaller vytvára dočasný priečinok a umiestňuje doň súbory v _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 def generate_rsa_keys():
     key = RSA.generate(2048)
@@ -46,8 +55,7 @@ def decrypt_message(encrypted_message, key):
         decrypted_message = cipher.decrypt_and_verify(ciphertext, tag).decode('utf-8')
         return decrypted_message
     except ValueError as e:
-        if not exit_flag.is_set():
-            print(f"Dešifrování selhalo: {e}")
+        print(f"Dešifrování selhalo: {e}")
         return None
 
 def encrypt_message(message, key):
@@ -64,7 +72,7 @@ def clear_input_line():
     sys.stdout.write('\033[2K\033[1G')  # Vymaž aktuální řádek
 
 def receive_messages(secure_socket, key, language):
-    while not exit_flag.is_set():
+    while True:
         try:
             ready_to_read, _, _ = select.select([secure_socket], [], [], 1)
             if ready_to_read:
@@ -82,14 +90,14 @@ def receive_messages(secure_socket, key, language):
                 else:
                     break
         except Exception as e:
-            if not exit_flag.is_set():
-                if language == 'EN':
-                    print(f"Error receiving message: {e}")
-                elif language == 'CZ':
-                    print(f"Chyba při přijímání zprávy: {e}")
+            if language == 'EN':
+                print(f"Error receiving message: {e}")
+            elif language == 'CZ':
+                print(f"Chyba při přijímání zprávy: {e}")
             break
 
 def start_client():
+    print("Client started.")
     while True:
         try:
             language = input("Choose language - (EN/CZ): ").upper()
@@ -105,29 +113,30 @@ def start_client():
     host = '127.0.0.1'
     port = 12345
     context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    context.load_verify_locations("server_cert.pem")
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
 
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     secure_socket = context.wrap_socket(client_socket, server_hostname=host)
     secure_socket.connect((host, port))
 
-    secure_socket.send(public_key.export_key())  # Poslání veřejného klíče serveru
+    secure_socket.send(public_key.export_key())  # Poslanie verejného kľúča serveru
     encrypted_aes_key = secure_socket.recv(2048)
     aes_key = decrypt_aes_key(encrypted_aes_key, private_key)
 
     try:
         if language == 'EN':
             name = input("Enter your name: ")
-            print(f"Your name: {name}")
         elif language == 'CZ':
             name = input("Zadejte vaše jméno: ")
-            print(f"Vaše jméno: {name}")
 
         name = to_ascii(name)
         secure_socket.send(f"TEXT:{name}".encode('utf-8'))
 
         receive_thread = threading.Thread(target=receive_messages, args=(secure_socket, aes_key, language))
         receive_thread.start()
+
+        last_sent_time = 0
 
         while True:
             clear_input_line()
@@ -136,10 +145,26 @@ def start_client():
             elif language == 'CZ':
                 message = input("Napište zprávu (pro ukončení 'exit'): ")
 
-            message = to_ascii(message)
+            message = to_ascii(message).strip()
+
+            # Kontrola prázdnej správy alebo správy s len medzerami
+            if not message:
+                if language == 'EN':
+                    print("Message cannot be empty or only whitespace. Please type a valid message.")
+                elif language == 'CZ':
+                    print("Zpráva nemůže být prázdná nebo obsahovat pouze mezery. Napište prosím platnou zprávu.")
+                continue
+
+            # Kontrola času medzi správami (1 sekunda)
+            current_time = time.time()
+            if current_time - last_sent_time < 1:
+                if language == 'EN':
+                    print("You are sending messages too quickly. Please wait a moment before sending another message.")
+                elif language == 'CZ':
+                    print("Odesíláte zprávy příliš rychle. Před odesláním další zprávy prosím počkejte chvíli.")
+                continue
 
             if message.lower() == 'exit':
-                exit_flag.set()
                 break
 
             encrypted_message = encrypt_message(message, aes_key)
@@ -149,8 +174,10 @@ def start_client():
                 print(f"Type your message (type 'exit' to quit): ", end='', flush=True)
             elif language == 'CZ':
                 print(f"Napište zprávu (pro ukončení 'exit'): ", end='', flush=True)
+
+            last_sent_time = current_time
+
     except KeyboardInterrupt:
-        exit_flag.set()
         if language == 'EN':
             print("\nProgram terminated successfully.")
         elif language == 'CZ':
