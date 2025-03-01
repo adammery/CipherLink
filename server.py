@@ -9,9 +9,13 @@ from Crypto.Util.Padding import pad, unpad
 import base64
 from dotenv import load_dotenv
 
-# Načítanie hodnoty zo súboru .env
+# Načítanie hodnôt zo súboru .env
 load_dotenv()
 SECRET_KEY = os.getenv('SECRET_KEY').encode('utf-8')
+HOST = os.getenv('HOST', '127.0.0.1')
+PORT = int(os.getenv('PORT', 12345))
+CERT_PATH = os.getenv('CERT_PATH', 'server_cert.pem')
+KEY_PATH = os.getenv('KEY_PATH', 'server_key.pem')
 
 clients = []
 
@@ -89,14 +93,12 @@ def handle_client(secure_socket, client_address):
     clients.remove((secure_socket, name))
 
 def start_server():
-    host = '127.0.0.1'
-    port = 12345
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((host, port))
+    server_socket.bind((HOST, PORT))
     server_socket.listen(5)
 
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.load_cert_chain(certfile="server_cert.pem", keyfile="server_key.pem")
+    context.load_cert_chain(certfile=CERT_PATH, keyfile=KEY_PATH)
 
     generate_and_save_key()
 
