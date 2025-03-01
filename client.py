@@ -92,8 +92,15 @@ class ChatClientApp:
         cipher_rsa = PKCS1_OAEP.new(self.private_key)
         self.aes_key = cipher_rsa.decrypt(encrypted_aes_key)
 
-        self.user_name = simpledialog.askstring("Name", "Enter your name:")
-        self.user_name = unicodedata.normalize('NFKD', self.user_name).encode('ascii', 'ignore').decode('ascii')
+        while True:
+            self.user_name = simpledialog.askstring("Name", "Enter your name:")
+            # Normalizovanie a kontrola mena
+            self.user_name = unicodedata.normalize('NFKD', self.user_name).encode('ascii', 'ignore').decode('ascii')
+            if self.user_name.strip() == "" or len(self.user_name) < 3:
+                self.display_message("System: Name must be at least 3 characters long and not empty.")
+            else:
+                break
+
         self.secure_socket.send(f"TEXT:{self.user_name}".encode('utf-8'))
         self.display_message(f"System: {self.user_name} joined the chat.")
 
