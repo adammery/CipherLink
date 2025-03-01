@@ -12,10 +12,15 @@ from dotenv import load_dotenv
 # Načítanie hodnôt zo súboru .env
 load_dotenv()
 SECRET_KEY = os.getenv('SECRET_KEY').encode('utf-8')
-HOST = os.getenv('HOST', '127.0.0.1')
-PORT = int(os.getenv('PORT', 12345))
+HOST = os.getenv('HOST', '0.0.0.0')
+PORT = os.getenv('PORT')
+if PORT is None:
+    raise Exception("PORT is missing in environment variables")
+PORT = int(PORT)
+
 CERT_PATH = os.getenv('CERT_PATH', 'server_cert.pem')
 KEY_PATH = os.getenv('KEY_PATH', 'server_key.pem')
+CERT_PASSPHRASE = os.getenv('CERT_PASSPHRASE', '').encode('utf-8')
 
 clients = []
 
@@ -98,7 +103,7 @@ def start_server():
     server_socket.listen(5)
 
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.load_cert_chain(certfile=CERT_PATH, keyfile=KEY_PATH)
+    context.load_cert_chain(certfile=CERT_PATH, keyfile=KEY_PATH, password=CERT_PASSPHRASE)
 
     generate_and_save_key()
 
