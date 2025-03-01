@@ -9,6 +9,8 @@ import threading
 import select
 import os
 
+exit_flag = threading.Event()
+
 def generate_rsa_keys():
     key = RSA.generate(2048)
     private_key = key.export_key()
@@ -44,7 +46,8 @@ def decrypt_message(encrypted_message, key):
         decrypted_message = cipher.decrypt_and_verify(ciphertext, tag).decode('utf-8')
         return decrypted_message
     except ValueError as e:
-        print(f"Dešifrovanie zlyhalo: {e}")
+        if not exit_flag.is_set():
+            print(f"Dešifrování selhalo: {e}")
         return None
 
 def encrypt_message(message, key):
@@ -58,10 +61,10 @@ def to_ascii(input_str):
     return unicodedata.normalize('NFKD', input_str).encode('ascii', 'ignore').decode('ascii')
 
 def clear_input_line():
-    sys.stdout.write('\033[2K\033[1G')  # Vymaž aktuálny riadok
+    sys.stdout.write('\033[2K\033[1G')  # Vymaž aktuální řádek
 
-def receive_messages(secure_socket, key):
-    while True:
+def receive_messages(secure_socket, key, language):
+    while not exit_flag.is_set():
         try:
             ready_to_read, _, _ = select.select([secure_socket], [], [], 1)
             if ready_to_read:
@@ -70,15 +73,33 @@ def receive_messages(secure_socket, key):
                     name, encrypted_message = message_with_name.split(":", 1)
                     decrypted_response = decrypt_message(encrypted_message, key)
                     clear_input_line()
-                    print(f"\rPrijatá správa od {name}: {decrypted_response}")
-                    print("Napíšte správu pre server (pre ukončenie napíšte 'exit'): ", end='', flush=True)
+                    if language == 'EN':
+                        print(f"\rReceived message from {name}: {decrypted_response}")
+                        print("Type your message (type 'exit' to quit): ", end='', flush=True)
+                    elif language == 'CZ':
+                        print(f"\rPřijatá zpráva od {name}: {decrypted_response}")
+                        print("Napište zprávu (pro ukončení napište 'exit'): ", end='', flush=True)
                 else:
                     break
         except Exception as e:
-            print(f"Chyba pri prijímaní správy: {e}")
+            if not exit_flag.is_set():
+                if language == 'EN':
+                    print(f"Error receiving message: {e}")
+                elif language == 'CZ':
+                    print(f"Chyba při přijímání zprávy: {e}")
             break
 
 def start_client():
+    while True:
+        try:
+            language = input("Choose language - (EN/CZ): ").upper()
+            if language in ['EN', 'CZ']:
+                break
+            print("Invalid language selection. Please choose 'EN' or 'CZ'.")
+        except KeyboardInterrupt:
+            print("\nProgram byl úspěšně ukončen.")
+            return
+
     private_key, public_key = load_rsa_keys()
 
     host = '127.0.0.1'
@@ -90,39 +111,56 @@ def start_client():
     secure_socket = context.wrap_socket(client_socket, server_hostname=host)
     secure_socket.connect((host, port))
 
-    secure_socket.send(public_key.export_key())  # Poslanie verejného kľúča serveru
+    secure_socket.send(public_key.export_key())  # Poslání veřejného klíče serveru
     encrypted_aes_key = secure_socket.recv(2048)
     aes_key = decrypt_aes_key(encrypted_aes_key, private_key)
 
-    name = input("Zadajte vaše meno: ")
-    name = to_ascii(name)
-
-    secure_socket.send(f"TEXT:{name}".encode('utf-8'))
-    print(f"Vaše meno: {name}")
-
-    receive_thread = threading.Thread(target=receive_messages, args=(secure_socket, aes_key))
-    receive_thread.start()
-
     try:
+        if language == 'EN':
+            name = input("Enter your name: ")
+            print(f"Your name: {name}")
+        elif language == 'CZ':
+            name = input("Zadejte vaše jméno: ")
+            print(f"Vaše jméno: {name}")
+
+        name = to_ascii(name)
+        secure_socket.send(f"TEXT:{name}".encode('utf-8'))
+
+        receive_thread = threading.Thread(target=receive_messages, args=(secure_socket, aes_key, language))
+        receive_thread.start()
+
         while True:
             clear_input_line()
-            message = input("Napíšte správu (pre ukončenie 'exit'): ")
+            if language == 'EN':
+                message = input("Type your message (type 'exit' to quit): ")
+            elif language == 'CZ':
+                message = input("Napište zprávu (pro ukončení 'exit'): ")
+
             message = to_ascii(message)
 
             if message.lower() == 'exit':
+                exit_flag.set()
                 break
 
             encrypted_message = encrypt_message(message, aes_key)
             secure_socket.send(encrypted_message.encode('utf-8'))
             clear_input_line()
-            print(f"Napíšte správu (pre ukončenie 'exit'): ", end='', flush=True)
+            if language == 'EN':
+                print(f"Type your message (type 'exit' to quit): ", end='', flush=True)
+            elif language == 'CZ':
+                print(f"Napište zprávu (pro ukončení 'exit'): ", end='', flush=True)
     except KeyboardInterrupt:
-        print("\nProgram bol úspešne ukončený.")
+        exit_flag.set()
+        if language == 'EN':
+            print("\nProgram terminated successfully.")
+        elif language == 'CZ':
+            print("\nProgram byl úspěšně ukončen.")
     finally:
         secure_socket.close()
-        print("Spojenie bolo ukončené.")
+        if language == 'EN':
+            print("Connection closed.")
+        elif language == 'CZ':
+            print("Spojení bylo ukončeno.")
 
 if __name__ == "__main__":
     start_client()
-
-    
