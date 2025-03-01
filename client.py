@@ -18,12 +18,19 @@ class ChatClientApp:
         self.root.title("Encrypted Chat")
         self.root.geometry("735x450")
         
+        self.host = simpledialog.askstring("Server Settings", "Enter server IP address:")
+        self.port = simpledialog.askinteger("Server Settings", "Enter server port:")
+        
+        if not self.host or not self.port:
+            messagebox.showerror("Error", "IP and port are required!")
+            sys.exit()
+
         self.text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, state=tk.DISABLED, font=("Monospace", 10))
         self.text_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
 
         self.entry = tk.Entry(root, width=70)
         self.entry.pack(padx=10, pady=5, side=tk.LEFT, fill=tk.X, expand=True)
-        self.entry.bind("<Return>", self.send_message)  # Toto už zavolá správne self.send_message
+        self.entry.bind("<Return>", self.send_message)
 
         self.send_button = tk.Button(root, text="Send", command=self.send_message)
         self.send_button.pack(padx=5, pady=5, side=tk.RIGHT)
@@ -69,38 +76,21 @@ class ChatClientApp:
 
         return private_key, public_key
 
-    def send_message(self, event=None):
-        message = self.entry.get().strip()
-        if message:
-            self.display_message(f"Me: {message}")
-            self.entry.delete(0, tk.END)
-
-
     def setup_connection(self):
-        host = '127.0.0.1'
-        port = 12345
         context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
 
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.secure_socket = context.wrap_socket(client_socket, server_hostname=host)
-        self.secure_socket.connect((host, port))
+        self.secure_socket = context.wrap_socket(client_socket, server_hostname=self.host)
+        self.secure_socket.connect((self.host, self.port))
 
         self.secure_socket.send(self.public_key.export_key())
         encrypted_aes_key = self.secure_socket.recv(2048)
         cipher_rsa = PKCS1_OAEP.new(self.private_key)
         self.aes_key = cipher_rsa.decrypt(encrypted_aes_key)
 
-        while True:
-            self.user_name = simpledialog.askstring("Name", "Enter your name:")
-            # Normalizovanie a kontrola mena
-            self.user_name = unicodedata.normalize('NFKD', self.user_name).encode('ascii', 'ignore').decode('ascii')
-            if self.user_name.strip() == "" or len(self.user_name) < 3:
-                self.display_message("System: Name must be at least 3 characters long and not empty.")
-            else:
-                break
-
+        self.user_name = simpledialog.askstring("Name", "Enter your name:")
         self.secure_socket.send(f"TEXT:{self.user_name}".encode('utf-8'))
         self.display_message(f"System: {self.user_name} joined the chat.")
 
@@ -110,27 +100,13 @@ class ChatClientApp:
         nonce = cipher.nonce
         return base64.urlsafe_b64encode(nonce + tag + ciphertext).decode('utf-8')
 
-    def decrypt_message(self, encrypted_message):
-        encrypted_message_bytes = base64.urlsafe_b64decode(encrypted_message.encode('utf-8'))
-        nonce = encrypted_message_bytes[:16]
-        tag = encrypted_message_bytes[16:32]
-        ciphertext = encrypted_message_bytes[32:]
-        cipher = AES.new(self.aes_key, AES.MODE_EAX, nonce=nonce)
-        return cipher.decrypt_and_verify(ciphertext, tag).decode('utf-8')
-
     def send_message(self, event=None):
-        current_time = time.time()
-        if current_time - self.last_message_time < 1:
-            self.display_message("System: Please wait 1 second between messages.")
-            return
-
         message = self.entry.get().strip()
         if message:
             encrypted_message = self.encrypt_message(message)
             self.secure_socket.send(encrypted_message.encode('utf-8'))
             self.entry.delete(0, tk.END)
             self.display_message(f"Me: {message}")
-            self.last_message_time = current_time
 
     def display_message(self, message):
         self.text_area.config(state=tk.NORMAL)
@@ -154,8 +130,15 @@ class ChatClientApp:
                 self.display_message(f"System: Error - {str(e)}")
                 break
 
+    def decrypt_message(self, encrypted_message):
+        encrypted_message_bytes = base64.urlsafe_b64decode(encrypted_message.encode('utf-8'))
+        nonce = encrypted_message_bytes[:16]
+        tag = encrypted_message_bytes[16:32]
+        ciphertext = encrypted_message_bytes[32:]
+        cipher = AES.new(self.aes_key, AES.MODE_EAX, nonce=nonce)
+        return cipher.decrypt_and_verify(ciphertext, tag).decode('utf-8')
+
     def logout(self):
-        self.display_message("System: Logging out...")
         self.secure_socket.close()
         self.root.quit()
 
