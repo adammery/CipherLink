@@ -102,11 +102,20 @@ class ChatClientApp:
 
     def send_message(self, event=None):
         message = self.entry.get().strip()
-        if message:
-            encrypted_message = self.encrypt_message(message)
-            self.secure_socket.send(encrypted_message.encode('utf-8'))
-            self.entry.delete(0, tk.END)
-            self.display_message(f"Me: {message}")
+        if not message:  # Ak je správa prázdna, nevykonáme nič
+            return
+
+        current_time = time.time()
+        if current_time - self.last_message_time < 1:  # 1 sekundy medzi správami
+            self.display_message("System: You're sending messages too quickly!")
+            return
+
+        encrypted_message = self.encrypt_message(message)
+        self.secure_socket.send(encrypted_message.encode('utf-8'))
+        self.entry.delete(0, tk.END)
+        self.display_message(f"Me: {message}")
+        self.last_message_time = current_time
+
 
     def display_message(self, message):
         self.text_area.config(state=tk.NORMAL)
