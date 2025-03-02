@@ -26,6 +26,8 @@ openssl.cnf
 server.csr
 server_cert.pem
 server_key.pem
+private.pem
+public.pem
 
 # Ignorovať súbor prostredia
 .env
