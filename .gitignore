@@ -1,0 +1,33 @@
+# Ignorovať Python kompilované súbory
+*.pyc
+__pycache__/
+
+# Ignorovať súbory a priečinky generované nástrojmi na vytváranie balíčkov
+*.egg-info/
+build/
+dist/
+
+# Ignorovať súkromné a verejné kľúče
+private.pem
+public.pem
+
+# Ignorovať ikony
+app.ico
+app.icns
+
+# Ignorovať AES kľúč
+aes_key.bin
+
+# Ignorovať súbory generované PyInstallerom
+*.spec
+
+# Ignorovať OpenSSL konfiguračný súbor a certifikáty
+openssl.cnf
+server.csr
+server_cert.pem
+server_key.pem
+private.pem
+public.pem
+
+# Ignorovať súbor prostredia
+.env
