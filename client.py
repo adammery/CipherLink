@@ -66,11 +66,13 @@ class ChatClientApp:
         dialog = tk.Toplevel(self.root)
         dialog.title("Server Settings")
 
+        # Názov a zoznam serverov
         tk.Label(dialog, text="Select a server or enter a new one:").pack(padx=10, pady=10)
-        server_list = ttk.Combobox(dialog, values=servers, width=40)
+        server_list = ttk.Combobox(dialog, values=servers, width=40, state="readonly")  # Nastavenie readonly
         server_list.pack(padx=10, pady=5)
-        server_list.set("Enter new server")
+        server_list.set("Select a server")  # Predvolený text
 
+        # Polia na manuálne zadanie IP a portu
         tk.Label(dialog, text="IP Address:").pack(padx=10, pady=5)
         ip_entry = tk.Entry(dialog, width=30)
         ip_entry.pack(padx=10, pady=5)
@@ -79,9 +81,10 @@ class ChatClientApp:
         port_entry = tk.Entry(dialog, width=30)
         port_entry.pack(padx=10, pady=5)
 
+        # Funkcie pre tlačidlá
         def submit():
             selected = server_list.get()
-            if selected and selected != "Enter new server":
+            if selected and selected != "Select a server":
                 ip, port = selected.split(":")
                 port = int(port)
             else:
@@ -95,11 +98,51 @@ class ChatClientApp:
             dialog.result = (ip, port)
             dialog.destroy()
 
+        # Štítok pre spätnú väzbu
+        feedback_label = tk.Label(dialog, text="", fg="green")  # Prazdný text na začiatok
+        feedback_label.pack(padx=10, pady=5)
+
+        def remove_server():
+            selected = server_list.get()
+            if selected and selected != "Select a server":
+                self.delete_server_from_settings(selected)
+                server_list['values'] = self.load_server_settings()  # Aktualizácia zoznamu serverov
+                feedback_label.config(text=f"System: Server {selected} successfully removed.")  # Zobraziť správu
+            else:
+                feedback_label.config(text="System: No server selected to remove.", fg="red")  # Chyba
+
+
+        def toggle_remove_button(event):
+            if server_list.get() and server_list.get() != "Select a server":
+                remove_button.pack(padx=10, pady=5)  # Zobrazí tlačidlo
+            else:
+                remove_button.pack_forget()  # Skryje tlačidlo
+
+        # Tlačidlá
         submit_button = tk.Button(dialog, text="Connect", command=submit)
-        submit_button.pack(pady=10)
+        submit_button.pack(padx=10, pady=5)
+
+        remove_button = tk.Button(dialog, text="Remove", command=remove_server)
+        remove_button.pack_forget()
+
+        # Prepojenie udalosti výberu na zobrazenie tlačidla Remove
+        server_list.bind("<<ComboboxSelected>>", toggle_remove_button)
 
         dialog.wait_window()
         return dialog.result
+
+
+    def delete_server_from_settings(self, server):
+        """Odstráni server zo súboru s uloženými nastaveniami."""
+        settings_path = os.path.join(os.path.dirname(__file__), "chat_client_settings.txt")
+        if os.path.exists(settings_path):
+            with open(settings_path, "r") as file:
+                servers = file.readlines()
+            with open(settings_path, "w") as file:
+                for line in servers:
+                    if line.strip() != server:
+                        file.write(line)
+
     
     def is_server_saved(self):
         settings_path = os.path.join(os.path.dirname(__file__), "chat_client_settings.txt")
